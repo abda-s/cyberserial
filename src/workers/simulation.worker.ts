@@ -21,7 +21,13 @@ interface UartConfig {
     stopBits: 1 | 2;
 }
 
-let uartConfig: UartConfig = {
+let txConfig: UartConfig = {
+    dataBits: 8,
+    parity: 'none',
+    stopBits: 1
+};
+
+let rxConfig: UartConfig = {
     dataBits: 8,
     parity: 'none',
     stopBits: 1
@@ -99,8 +105,8 @@ class UartTransmitter {
                 break;
             case 'DATA':
                 this.bitIndex++;
-                if (this.bitIndex >= uartConfig.dataBits) {
-                    if (uartConfig.parity !== 'none') {
+                if (this.bitIndex >= txConfig.dataBits) {
+                    if (txConfig.parity !== 'none') {
                         this.state = 'PARITY';
                     } else {
                         this.state = 'STOP';
@@ -131,10 +137,10 @@ class UartTransmitter {
 
     calculateParity(byte: number): number {
         let ones = 0;
-        for (let i = 0; i < uartConfig.dataBits; i++) {
+        for (let i = 0; i < txConfig.dataBits; i++) {
             if ((byte >> i) & 1) ones++;
         }
-        if (uartConfig.parity === 'even') {
+        if (txConfig.parity === 'even') {
             return (ones % 2 === 0) ? 0 : 1;
         } else {
             return (ones % 2 !== 0) ? 0 : 1;
@@ -175,7 +181,7 @@ class UartReceiver {
             this.lastRxLevel = currentRxLevel;
 
             // Check for timeout / reset
-            const totalBits = 1 + uartConfig.dataBits + (uartConfig.parity !== 'none' ? 1 : 0) + uartConfig.stopBits;
+            const totalBits = 1 + rxConfig.dataBits + (rxConfig.parity !== 'none' ? 1 : 0) + rxConfig.stopBits;
             if (this.timeSinceStart > (totalBits + 0.5) * this.bitDuration) {
                 this.state = 'HUNTING';
                 return 0;
@@ -198,50 +204,50 @@ class UartReceiver {
                 // Determine what kind of bit this is
                 if (bitIndex === 0) return 1; // Start Bit (Red)
 
-                if (bitIndex <= uartConfig.dataBits) {
+                if (bitIndex <= rxConfig.dataBits) {
                     const dataBitIndex = bitIndex - 1;
                     // LSB First
                     if (currentRxLevel === 1) {
                         this.rxBuffer |= (1 << dataBitIndex);
                         this.parityCalculated ^= 1; // Update calculated parity
                     }
-                    return 2; // Yellow
+                    return 3; // Green (Was 2/Yellow)
                 }
 
                 // Parity or Stop
-                if (uartConfig.parity !== 'none') {
-                    if (bitIndex === uartConfig.dataBits + 1) {
-                        const expectedParity = uartConfig.parity === 'even' ? this.parityCalculated : (this.parityCalculated ^ 1);
+                if (rxConfig.parity !== 'none') {
+                    if (bitIndex === rxConfig.dataBits + 1) {
+                        const expectedParity = rxConfig.parity === 'even' ? this.parityCalculated : (this.parityCalculated ^ 1);
                         const receivedParity = currentRxLevel;
 
                         if (receivedParity !== expectedParity) {
                             this.rxEventQueue.push({ type: 'RX_ERROR', payload: 'PARITY_ERROR' });
-                            return 1; // Red for Error
+                            return 2; // Orange for Error
                         }
                         return 5; // Blue for Parity
                     }
-                    if (bitIndex > uartConfig.dataBits + 1) {
+                    if (bitIndex > rxConfig.dataBits + 1) {
                         // Stop Bit Logic
                         if (currentRxLevel !== 1) {
                             this.rxEventQueue.push({ type: 'RX_ERROR', payload: 'FRAMING_ERROR' });
-                            return 1;
+                            return 2; // Orange for Error
                         }
                         // Emit Data ONCE
-                        if (bitIndex === uartConfig.dataBits + 2) {
+                        if (bitIndex === rxConfig.dataBits + 2) {
                             this.rxEventQueue.push({ type: 'RX_DATA', payload: String.fromCharCode(this.rxBuffer) });
                             return 4;
                         }
                         return 4;
                     }
                 } else {
-                    if (bitIndex > uartConfig.dataBits) {
+                    if (bitIndex > rxConfig.dataBits) {
                         // Stop Bit Logic (No Parity)
                         if (currentRxLevel !== 1) {
                             this.rxEventQueue.push({ type: 'RX_ERROR', payload: 'FRAMING_ERROR' });
-                            return 1;
+                            return 2; // Orange for Error
                         }
                         // Emit Data ONCE
-                        if (bitIndex === uartConfig.dataBits + 1) {
+                        if (bitIndex === rxConfig.dataBits + 1) {
                             this.rxEventQueue.push({ type: 'RX_DATA', payload: String.fromCharCode(this.rxBuffer) });
                             return 4;
                         }
@@ -284,7 +290,11 @@ ctx.onmessage = (event) => {
             if (payload.rxBaud) {
                 rxBaud = payload.rxBaud;
             }
-            if (payload.config) uartConfig = { ...uartConfig, ...payload.config };
+            // Support updating separate TX/RX configs
+            if (payload.txConfig) txConfig = { ...txConfig, ...payload.txConfig };
+            if (payload.rxConfig) rxConfig = { ...rxConfig, ...payload.rxConfig };
+            // Legacy support if needed, or remove? Keeping for now but unused by new code logic
+            // if (payload.config) uartConfig = { ...uartConfig, ...payload.config }; 
             break;
         case 'TRANSMIT':
             if (payload.char) {

@@ -15,7 +15,7 @@ export function useSimulation() {
     // Buffer to hold data before flushing to state (optional optimization)
     // For now we just append to state for simplicity in Phase 1
     // But growing arrays indefinitely is bad. We need a rolling window.
-    const MAX_POINTS = 1000;
+    const MAX_POINTS = 50000;
 
     useEffect(() => {
         workerRef.current = new SimulationWorker();
@@ -94,7 +94,7 @@ export function useSimulation() {
         workerRef.current?.postMessage({ type: 'TRANSMIT', payload: { char } });
     }, []);
 
-    const configure = useCallback((config: { txBaud?: number; rxBaud?: number; config?: any }) => {
+    const configure = useCallback((config: { txBaud?: number; rxBaud?: number; config?: any; txConfig?: any; rxConfig?: any }) => {
         workerRef.current?.postMessage({ type: 'CONFIGURE', payload: config });
     }, []);
 

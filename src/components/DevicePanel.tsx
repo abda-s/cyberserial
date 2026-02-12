@@ -3,7 +3,7 @@ import { GlitchButton } from './GlitchButton';
 
 interface DevicePanelProps {
     onTransmit: (char: string) => void;
-    onConfigure: (config: { txBaud?: number; rxBaud?: number; config?: any }) => void;
+    onConfigure: (config: { txBaud?: number; rxBaud?: number; config?: any; txConfig?: any; rxConfig?: any }) => void;
     onAutoMode: (enabled: boolean) => void;
     isRunning: boolean;
     onStart: () => void;
@@ -17,7 +17,8 @@ export const DevicePanel: React.FC<DevicePanelProps> = ({
 }) => {
     const [txBaud, setTxBaud] = useState(2);
     const [rxBaud, setRxBaud] = useState(2);
-    const [parity, setParity] = useState<'none' | 'even' | 'odd'>('none');
+    const [txParity, setTxParity] = useState<'none' | 'even' | 'odd'>('none');
+    const [rxParity, setRxParity] = useState<'none' | 'even' | 'odd'>('none');
     const [inputData, setInputData] = useState('');
     const [autoMode, setAutoMode] = useState(false);
     const [txStatus, setTxStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
@@ -53,10 +54,16 @@ export const DevicePanel: React.FC<DevicePanelProps> = ({
         onConfigure({ rxBaud: val });
     };
 
-    const handleParityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const handleTxParityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const val = e.target.value as 'none' | 'even' | 'odd';
-        setParity(val);
-        onConfigure({ config: { parity: val } }); // Send general config update
+        setTxParity(val);
+        onConfigure({ txConfig: { parity: val } });
+    };
+
+    const handleRxParityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const val = e.target.value as 'none' | 'even' | 'odd';
+        setRxParity(val);
+        onConfigure({ rxConfig: { parity: val } });
     };
 
     // Map internal speed (1-10) to "Standard" Baud Rates for display
@@ -98,40 +105,42 @@ export const DevicePanel: React.FC<DevicePanelProps> = ({
     };
 
     return (
-        <div className="grid grid-cols-2 gap-4 mt-4 h-full">
+        <div className="grid grid-cols-2 gap-4 h-full">
             {/* Transmitter Panel */}
-            <div className="bg-black/40 border border-cyber-dark-gray p-4 rounded relative overflow-hidden group">
+            <div className="bg-black/40 border border-cyber-dark-gray p-4 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-1 bg-cyber-neon-cyan text-black text-[10px] font-bold">TX</div>
                 <h3 className="text-cyber-neon-cyan text-sm mb-4 uppercase tracking-widest">Transmitter</h3>
 
                 <div className="space-y-4">
-                    <div className="space-y-1">
-                        <div className="flex justify-between text-xs text-gray-400">
-                            <span>Baud Rate</span>
-                            <span className="text-cyber-neon-cyan">{getDisplayBaud(txBaud)} Bd</span>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <div className="flex justify-between text-xs text-gray-400">
+                                <span>Baud Rate</span>
+                                <span className="text-cyber-neon-cyan">{getDisplayBaud(txBaud)} Bd</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="1" max="11" step="1"
+                                value={txBaud}
+                                onChange={handleTxBaudChange}
+                                className="w-full accent-cyber-neon-cyan h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                            />
                         </div>
-                        <input
-                            type="range"
-                            min="1" max="11" step="1"
-                            value={txBaud}
-                            onChange={handleTxBaudChange}
-                            className="w-full accent-cyber-neon-cyan h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                        />
-                    </div>
 
-                    <div className="space-y-1">
-                        <div className="flex justify-between text-xs text-gray-400">
-                            <span>Parity</span>
+                        <div className="space-y-1">
+                            <div className="flex justify-between text-xs text-gray-400">
+                                <span>Parity</span>
+                            </div>
+                            <select
+                                value={txParity}
+                                onChange={handleTxParityChange}
+                                className="w-full bg-black border border-cyber-dark-gray text-cyber-neon-cyan text-xs p-1 focus:outline-none uppercase"
+                            >
+                                <option value="none">None</option>
+                                <option value="even">Even</option>
+                                <option value="odd">Odd</option>
+                            </select>
                         </div>
-                        <select
-                            value={parity}
-                            onChange={handleParityChange}
-                            className="w-full bg-black border border-cyber-dark-gray text-cyber-neon-cyan text-xs p-1 focus:outline-none uppercase"
-                        >
-                            <option value="none">None</option>
-                            <option value="even">Even</option>
-                            <option value="odd">Odd</option>
-                        </select>
                     </div>
 
                     <div className="flex gap-2 relative">
@@ -172,25 +181,42 @@ export const DevicePanel: React.FC<DevicePanelProps> = ({
             </div>
 
             {/* Receiver Panel */}
-            <div className="bg-black/40 border border-cyber-dark-gray p-4 rounded relative overflow-hidden">
+            <div className="bg-black/40 border border-cyber-dark-gray p-4 relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-1 bg-cyber-neon-pink text-black text-[10px] font-bold">RX</div>
                 <h3 className="text-cyber-neon-pink text-sm mb-4 uppercase tracking-widest">Receiver</h3>
 
                 <div className="space-y-4">
-                    <div className="space-y-1">
-                        <div className="flex justify-between text-xs text-gray-400">
-                            <span>Baud Rate</span>
-                            <span className="text-cyber-neon-pink">{getDisplayBaud(rxBaud)} Bd</span>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <div className="flex justify-between text-xs text-gray-400">
+                                <span>Baud Rate</span>
+                                <span className="text-cyber-neon-pink">{getDisplayBaud(rxBaud)} Bd</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="1" max="11" step="1"
+                                value={rxBaud}
+                                onChange={handleRxBaudChange}
+                                className="w-full accent-cyber-neon-pink h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                            />
+                            <div className="text-[10px] text-gray-500 mt-1 col-span-2">
+                                * Mismatching baud rates will cause framing errors
+                            </div>
                         </div>
-                        <input
-                            type="range"
-                            min="1" max="11" step="1"
-                            value={rxBaud}
-                            onChange={handleRxBaudChange}
-                            className="w-full accent-cyber-neon-pink h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                        />
-                        <div className="text-[10px] text-gray-500 mt-1">
-                            * Mismatching baud rates will cause framing errors
+
+                        <div className="space-y-1">
+                            <div className="flex justify-between text-xs text-gray-400">
+                                <span>Parity</span>
+                            </div>
+                            <select
+                                value={rxParity}
+                                onChange={handleRxParityChange}
+                                className="w-full bg-black border border-cyber-dark-gray text-cyber-neon-pink text-xs p-1 focus:outline-none uppercase"
+                            >
+                                <option value="none">None</option>
+                                <option value="even">Even</option>
+                                <option value="odd">Odd</option>
+                            </select>
                         </div>
                     </div>
 
