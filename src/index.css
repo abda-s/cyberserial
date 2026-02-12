@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cyber-black: #050505;
+  --color-cyber-dark-gray: #121212;
+  --color-cyber-neon-cyan: #00F0FF;
+  --color-cyber-neon-yellow: #FCEE0A;
+  --color-cyber-neon-pink: #FFFF3C; /* Adjusted for better visibility */
+  --color-cyber-neon-green: #39FF14;
+  --color-cyber-neon-purple: #7000FF;
+
+  --font-display: "Orbitron", sans-serif;
+  --font-mono: "Fira Code", monospace;
+
+  --shadow-neon-cyan: 0 0 5px #00F0FF, 0 0 10px #00F0FF;
+  --shadow-neon-pink: 0 0 5px #FF003C, 0 0 10px #FF003C;
+  --shadow-neon-green: 0 0 5px #39FF14, 0 0 10px #39FF14;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-cyber-black);
+    color: white;
+    font-family: var(--font-mono); /* Default to mono for that terminal feel */
+    overflow: hidden; /* Prevent scrollbars generally, handle in containers */
+  }
+
+  /* Custom Scrollbar for Webkit */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-cyber-dark-gray); 
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-cyber-neon-cyan); 
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #00c0cc; 
+  }
+}
+
+@layer utilities {
+  .text-neon-cyan {
+    color: var(--color-cyber-neon-cyan);
+    text-shadow: 0 0 5px var(--color-cyber-neon-cyan);
+  }
+  
+  .border-neon-cyan {
+    border-color: var(--color-cyber-neon-cyan);
+    box-shadow: 0 0 5px var(--color-cyber-neon-cyan), inset 0 0 5px var(--color-cyber-neon-cyan);
+  }
+
+  /* Scanline Effect */
+  .scanline {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0),
+      rgba(255, 255, 255, 0) 50%,
+      rgba(0, 0, 0, 0.2) 50%,
+      rgba(0, 0, 0, 0.2)
+    );
+    background-size: 100% 4px;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.6;
+  }
+}
