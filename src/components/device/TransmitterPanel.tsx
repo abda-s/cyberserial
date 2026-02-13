@@ -23,7 +23,7 @@ export const TransmitterPanel: React.FC<TransmitterPanelProps> = ({
     const [txParity, setTxParity] = useState<'none' | 'even' | 'odd'>('none');
     const [txStopBits, setTxStopBits] = useState<number>(1);
     const [txIdleBits, setTxIdleBits] = useState<number>(0);
-    const [inputData, setInputData] = useState('');
+    const [inputData, setInputData] = useState('SOS');
 
     // Sync initial configuration on mount
     useEffect(() => {
@@ -88,7 +88,6 @@ export const TransmitterPanel: React.FC<TransmitterPanelProps> = ({
 
             const timer = setTimeout(() => {
                 setTxStatus('idle');
-                setInputData('');
             }, delay);
             return () => clearTimeout(timer);
         }

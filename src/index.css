@@ -5,7 +5,7 @@
   --color-cyber-dark-gray: #121212;
   --color-cyber-neon-cyan: #00F0FF;
   --color-cyber-neon-yellow: #FCEE0A;
-  --color-cyber-neon-pink: #FFFF3C; /* Adjusted for better visibility */
+  --color-cyber-neon-pink: #FFFF3C;
   --color-cyber-neon-green: #39FF14;
   --color-cyber-neon-purple: #7000FF;
 
@@ -47,7 +47,7 @@
     color: var(--color-cyber-neon-cyan);
     text-shadow: 0 0 5px var(--color-cyber-neon-cyan);
   }
-  
+
   .border-neon-cyan {
     border-color: var(--color-cyber-neon-cyan);
     box-shadow: 0 0 5px var(--color-cyber-neon-cyan), inset 0 0 5px var(--color-cyber-neon-cyan);

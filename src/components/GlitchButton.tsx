@@ -19,9 +19,9 @@ export const GlitchButton: React.FC<GlitchButtonProps> = ({
     const [isHovered, setIsHovered] = useState(false);
 
     const colors = {
-        cyan: { text: 'text-cyber-neon-cyan', border: 'border-cyber-neon-cyan', shadow: 'shadow-neon-cyan' },
-        pink: { text: 'text-cyber-neon-pink', border: 'border-cyber-neon-pink', shadow: 'shadow-neon-pink' },
-        green: { text: 'text-cyber-neon-green', border: 'border-cyber-neon-green', shadow: 'shadow-neon-green' },
+        cyan: { text: 'text-cyber-neon-cyan', border: 'border-cyber-neon-cyan', shadow: 'shadow-neon-cyan', bg: 'bg-cyber-neon-cyan/10' },
+        pink: { text: 'text-cyber-neon-pink', border: 'border-cyber-neon-pink', shadow: 'shadow-neon-pink', bg: 'bg-cyber-neon-pink/10' },
+        green: { text: 'text-cyber-neon-green', border: 'border-cyber-neon-green', shadow: 'shadow-neon-green', bg: 'bg-cyber-neon-green/10' },
     };
 
     const currentColors = colors[variant];
@@ -40,7 +40,7 @@ export const GlitchButton: React.FC<GlitchButtonProps> = ({
 
             {/* Background Hover Effect */}
             <motion.div
-                className={`absolute inset-0 bg-${variant === 'cyan' ? 'cyber-neon-cyan' : variant === 'pink' ? 'cyber-neon-pink' : 'cyber-neon-green'}/10`}
+                className={`absolute inset-0 ${currentColors.bg}`}
                 initial={{ scaleX: 0, originX: 0 }}
                 animate={{ scaleX: isHovered ? 1 : 0 }}
                 transition={{ duration: 0.3, ease: "circOut" }}

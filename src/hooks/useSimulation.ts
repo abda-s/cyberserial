@@ -96,7 +96,12 @@ export function useSimulation() {
     }, []);
 
     const reset = useCallback(() => {
-        setData([[], [], [], [], [], [], []]);
+        setData([[], [], [], [], [], []]);
+    }, []);
+
+    const clearHistory = useCallback(() => {
+        setData([[], [], [], [], [], []]);
+        setRxLog([]);
     }, []);
 
 
@@ -119,5 +124,5 @@ export function useSimulation() {
         workerRef.current?.postMessage({ type: 'SET_SPEED', payload: { speed } });
     }, []);
 
-    return { data, start, stop, reset, transmit, configure, setAutoMode, setSpeed, isRunning, rxLog, rxError, txBaud };
+    return { data, start, stop, reset, clearHistory, transmit, configure, setAutoMode, setSpeed, isRunning, rxLog, rxError, txBaud };
 }

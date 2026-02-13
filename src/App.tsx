@@ -8,7 +8,7 @@ import { ControlPanel } from './components/layout/ControlPanel';
 import { DEFAULT_SPEED } from './utils/serialUtils';
 
 function App() {
-  const { data, start, isRunning, transmit, configure, setAutoMode, setSpeed, rxLog, rxError, txBaud } = useSimulation();
+  const { data, start, isRunning, transmit, configure, setAutoMode, setSpeed, clearHistory, rxLog, rxError, txBaud } = useSimulation();
   const [currentSpeed, setCurrentSpeed] = useState(DEFAULT_SPEED);
   const scopeRef = useRef<ScopeGraphHandle>(null);
 
@@ -62,7 +62,7 @@ function App() {
           </section>
         </div>
 
-        <ControlPanel />
+        <ControlPanel onClearHistory={clearHistory} />
       </main>
     </div>
   );
