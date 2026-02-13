@@ -1,13 +1,27 @@
-# ... (rest of your file stays the same)
+name: Deploy to GitHub Pages
+
+# This was likely the missing part causing your error:
+on:
+  push:
+    branches: [ "main" ] # Change this if your branch is named 'master'
+  workflow_dispatch:
+
+# These permissions are required for the official GitHub Pages action
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write      # Required for the official action
-      id-token: write   # Required for the official action
-    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,12 +38,14 @@ jobs:
         run: npm run build
 
       - name: Setup Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v5
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist' # Ensure this matches your build output folder
+          # IMPORTANT: Make sure this matches your build output folder!
+          # Vite/Vue usually outputs to 'dist', React/CRA to 'build'.
+          path: './dist' 
 
       - name: Deploy to GitHub Pages
         id: deployment
