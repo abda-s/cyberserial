@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { GlitchButton } from './GlitchButton';
+import React, { useState } from 'react';
+import { TransmitterPanel } from './device/TransmitterPanel';
+import { ReceiverPanel } from './device/ReceiverPanel';
 
 interface DevicePanelProps {
     onTransmit: (char: string) => void;
@@ -15,104 +16,8 @@ export const DevicePanel: React.FC<DevicePanelProps> = ({
     onTransmit, onConfigure, onAutoMode, isRunning, onStart,
     rxLog = [], rxError = null
 }) => {
-    const [txBaud, setTxBaud] = useState(2);
-    const [rxBaud, setRxBaud] = useState(2);
-    const [txParity, setTxParity] = useState<'none' | 'even' | 'odd'>('none');
-    const [rxParity, setRxParity] = useState<'none' | 'even' | 'odd'>('none');
-    const [txStopBits, setTxStopBits] = useState<number>(1);
-    const [rxStopBits, setRxStopBits] = useState<number>(1);
-    const [txIdleBits, setTxIdleBits] = useState<number>(0);
-    const [inputData, setInputData] = useState('');
     const [autoMode, setAutoMode] = useState(false);
     const [txStatus, setTxStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
-    const logRef = React.useRef<HTMLDivElement>(null);
-
-    // Auto-scroll log
-    useEffect(() => {
-        if (logRef.current) {
-            logRef.current.scrollTop = logRef.current.scrollHeight;
-        }
-    }, [rxLog]);
-
-    useEffect(() => {
-        if (!isRunning && txStatus === 'sending') {
-            setTxStatus('sent');
-            // Reset after success message
-            setTimeout(() => {
-                setTxStatus('idle');
-                setInputData('');
-            }, 1500);
-        }
-    }, [isRunning, txStatus]);
-
-    const handleTxBaudChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = Number(e.target.value);
-        setTxBaud(val);
-        onConfigure({ txBaud: val });
-    };
-
-    const handleRxBaudChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = Number(e.target.value);
-        setRxBaud(val);
-        onConfigure({ rxBaud: val });
-    };
-
-    const handleTxParityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const val = e.target.value as 'none' | 'even' | 'odd';
-        setTxParity(val);
-        onConfigure({ txConfig: { parity: val } });
-    };
-
-    const handleRxParityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const val = e.target.value as 'none' | 'even' | 'odd';
-        setRxParity(val);
-        onConfigure({ rxConfig: { parity: val } });
-    };
-
-    const handleTxStopBitsChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const val = Number(e.target.value);
-        setTxStopBits(val);
-        onConfigure({ txConfig: { stopBits: val } });
-    };
-
-    const handleRxStopBitsChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const val = Number(e.target.value);
-        setRxStopBits(val);
-        onConfigure({ rxConfig: { stopBits: val } });
-    };
-
-    const handleTxIdleBitsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = Number(e.target.value);
-        setTxIdleBits(val);
-        onConfigure({ txConfig: { idleBits: val } }); // Make sure worker handles this
-    };
-
-    // Map internal speed (1-10) to "Standard" Baud Rates for display
-    const getDisplayBaud = (val: number) => {
-        const rates = [300, 600, 1200, 2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200];
-        // simple mapping: val=1 -> 300, val=6 -> 9600, val=11 -> 115200
-        const index = Math.min(Math.floor(val) - 1, rates.length - 1);
-        return rates[index] || 9600;
-    };
-
-    const handleSend = () => {
-        if (!inputData) return;
-
-        setTxStatus('sending');
-
-        // UX: Auto-start if not running
-        if (!isRunning) {
-            onStart();
-        }
-
-        // Send first char for now, or loop? 
-        // Let's implement full string sending in worker later, for now single char or burst
-        // We'll iterate here for simplicity
-        inputData.split('').forEach(char => {
-            onTransmit(char);
-        });
-        // Input clear happens after success timeout
-    };
 
     const toggleAuto = () => {
         const newState = !autoMode;
@@ -126,189 +31,38 @@ export const DevicePanel: React.FC<DevicePanelProps> = ({
     };
 
     return (
-        <div className="grid grid-cols-2 gap-4 h-full">
+        <div className="grid grid-cols-2 gap-4 h-full relative">
             {/* Transmitter Panel */}
-            <div className="bg-black/40 border border-cyber-dark-gray p-4 relative overflow-y-auto group">
-                <div className="absolute top-0 right-0 p-1 bg-cyber-neon-cyan text-black text-[10px] font-bold">TX</div>
-                <h3 className="text-cyber-neon-cyan text-sm mb-4 uppercase tracking-widest">Transmitter</h3>
+            <div className="h-full">
+                <TransmitterPanel
+                    onTransmit={onTransmit}
+                    onConfigure={onConfigure}
+                    onStart={onStart}
+                    isRunning={isRunning}
+                    txStatus={txStatus}
+                    setTxStatus={setTxStatus}
+                />
 
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                            <div className="flex justify-between text-xs text-gray-400">
-                                <span>Baud Rate</span>
-                                <span className="text-cyber-neon-cyan">{getDisplayBaud(txBaud)} Bd</span>
-                            </div>
-                            <input
-                                type="range"
-                                min="1" max="11" step="1"
-                                value={txBaud}
-                                onChange={handleTxBaudChange}
-                                className="w-full accent-cyber-neon-cyan h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                            />
-                        </div>
-
-                        <div className="space-y-1">
-                            <div className="flex justify-between text-xs text-gray-400">
-                                <span>Parity</span>
-                            </div>
-                            <select
-                                value={txParity}
-                                onChange={handleTxParityChange}
-                                className="w-full bg-black border border-cyber-dark-gray text-cyber-neon-cyan text-xs p-1 focus:outline-none uppercase"
-                            >
-                                <option value="none">None</option>
-                                <option value="even">Even</option>
-                                <option value="odd">Odd</option>
-                            </select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <div className="flex justify-between text-xs text-gray-400">
-                                <span>Stop Bits</span>
-                            </div>
-                            <select
-                                value={txStopBits}
-                                onChange={handleTxStopBitsChange}
-                                className="w-full bg-black border border-cyber-dark-gray text-cyber-neon-cyan text-xs p-1 focus:outline-none uppercase"
-                            >
-                                <option value={1}>1</option>
-                                <option value={2}>2</option>
-                            </select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <div className="flex justify-between text-xs text-gray-400">
-                                <span>Idle / Guard Bits</span>
-                                <span className="text-cyber-neon-cyan">{txIdleBits} bits</span>
-                            </div>
-                            <input
-                                type="range"
-                                min="0" max="10" step="1"
-                                value={txIdleBits}
-                                onChange={handleTxIdleBitsChange}
-                                className="w-full accent-cyber-neon-cyan h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                            />
-                        </div>
-
-
-                    </div>
-
-                    <div className="flex gap-2 relative mt-4">
+                <div className="absolute bottom-4 left-4 z-10">
+                    <label className="flex items-center gap-2 cursor-pointer bg-black/80 px-2 py-1 rounded border border-cyber-dark-gray/50 backdrop-blur-sm">
                         <input
-                            type="text"
-                            value={inputData}
-                            onChange={(e) => setInputData(e.target.value)}
-                            placeholder="DATA..."
-                            className={`flex-1 bg-black border border-cyber-dark-gray text-cyber-neon-cyan px-2 py-1 text-sm focus:outline-none focus:border-cyber-neon-cyan transition-colors ${txStatus !== 'idle' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            maxLength={8}
-                            disabled={txStatus !== 'idle'}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && txStatus === 'idle') handleSend();
-                            }}
+                            type="checkbox"
+                            checked={autoMode}
+                            onChange={toggleAuto}
+                            className="accent-cyber-neon-cyan bg-transparent"
                         />
-                        <GlitchButton
-                            onClick={handleSend}
-                            variant={txStatus === 'sent' ? 'green' : 'cyan'}
-                            className={`px-4 py-1 text-xs w-24 flex justify-center ${txStatus === 'sending' ? 'animate-pulse' : ''}`}
-                            disabled={txStatus !== 'idle'}
-                        >
-                            {txStatus === 'idle' ? 'SEND' : txStatus === 'sending' ? 'TX...' : 'SENT'}
-                        </GlitchButton>
-                    </div>
-
-                    <div className="pt-2 border-t border-cyber-dark-gray/30">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={autoMode}
-                                onChange={toggleAuto}
-                                className="accent-cyber-neon-cyan bg-transparent"
-                            />
-                            <span className="text-xs text-gray-400">Auto-Generate Traffic</span>
-                        </label>
-                    </div>
+                        <span className="text-xs text-gray-400">Auto-Generate Traffic</span>
+                    </label>
                 </div>
             </div>
 
             {/* Receiver Panel */}
-            <div className="bg-black/40 border border-cyber-dark-gray p-4 relative overflow-y-auto">
-                <div className="absolute top-0 right-0 p-1 bg-cyber-neon-pink text-black text-[10px] font-bold">RX</div>
-                <h3 className="text-cyber-neon-pink text-sm mb-4 uppercase tracking-widest">Receiver</h3>
-
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                            <div className="flex justify-between text-xs text-gray-400">
-                                <span>Baud Rate</span>
-                                <span className="text-cyber-neon-pink">{getDisplayBaud(rxBaud)} Bd</span>
-                            </div>
-                            <input
-                                type="range"
-                                min="1" max="11" step="1"
-                                value={rxBaud}
-                                onChange={handleRxBaudChange}
-                                className="w-full accent-cyber-neon-pink h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                            />
-
-                        </div>
-
-                        <div className="space-y-1">
-                            <div className="flex justify-between text-xs text-gray-400">
-                                <span>Parity</span>
-                            </div>
-                            <select
-                                value={rxParity}
-                                onChange={handleRxParityChange}
-                                className="w-full bg-black border border-cyber-dark-gray text-cyber-neon-pink text-xs p-1 focus:outline-none uppercase"
-                            >
-                                <option value="none">None</option>
-                                <option value="even">Even</option>
-                                <option value="odd">Odd</option>
-                            </select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <div className="flex justify-between text-xs text-gray-400">
-                                <span>Stop Bits</span>
-                            </div>
-                            <select
-                                value={rxStopBits}
-                                onChange={handleRxStopBitsChange}
-                                className="w-full bg-black border border-cyber-dark-gray text-cyber-neon-pink text-xs p-1 focus:outline-none uppercase"
-                            >
-                                <option value={1}>1</option>
-                                <option value={2}>2</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="p-2 border border-cyber-dark-gray/50 bg-black/50 h-16 overflow-hidden rounded relative">
-                        <div className="text-[10px] text-gray-500 mb-1 flex justify-between">
-                            <span>DECODED OUTPUT</span>
-                            <span className="text-[9px] text-gray-600">ASCII</span>
-                        </div>
-                        <div ref={logRef} className="font-mono text-xs text-cyber-neon-green text-sm overflow-y-auto h-10 w-full break-all whitespace-pre-wrap leading-tight">
-                            {rxLog.length === 0 ? (
-                                <span className="opacity-50 italic">Waiting for data...</span>
-                            ) : (
-                                rxLog.map((item, i) => (
-                                    <span key={i} className={item.error ? "text-[#FF003C] font-bold" : ""}>
-                                        {item.char}
-                                    </span>
-                                ))
-                            )}
-                            <span className="animate-pulse inline-block w-1.5 h-3 bg-cyber-neon-green ml-0.5 align-middle"></span>
-                        </div>
-
-                        {/* Error Overlay */}
-                        {rxError && (
-                            <div className="absolute inset-0 bg-red-900/90 flex items-center justify-center animate-pulse z-10 border border-red-500">
-                                <span className="text-red-100 font-bold text-xs tracking-widest uppercase">{rxError.replace('_', ' ')}</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
+            <div className="h-full">
+                <ReceiverPanel
+                    onConfigure={onConfigure}
+                    rxLog={rxLog}
+                    rxError={rxError}
+                />
             </div>
         </div>
     );
