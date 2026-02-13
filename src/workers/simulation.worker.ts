@@ -19,12 +19,14 @@ interface UartConfig {
     dataBits: 7 | 8;
     parity: 'none' | 'even' | 'odd';
     stopBits: 1 | 2;
+    idleBits?: number;
 }
 
 let txConfig: UartConfig = {
     dataBits: 8,
     parity: 'none',
-    stopBits: 1
+    stopBits: 1,
+    idleBits: 0
 };
 
 let rxConfig: UartConfig = {
@@ -47,6 +49,8 @@ class UartTransmitter {
     timeInState = 0;
     bitDuration = 0;
 
+    txCompleteSent = false;
+
     constructor() {
         this.updateConfig();
     }
@@ -61,18 +65,25 @@ class UartTransmitter {
         if (this.state === 'IDLE') {
             this.timeInState += deltaTime;
 
+            // Check guard time / idle bits requirement
+            const minIdleTime = (txConfig.idleBits || 0) * this.bitDuration;
+            if (this.timeInState < minIdleTime) {
+                return 1; // Not yet allowed to transmit
+            }
+
             // Check queue first
             if (txQueue.length > 0) {
-                // Slight delay before next char to visualize separation?
-                if (this.timeInState > this.bitDuration * 1) {
-                    const charCode = txQueue.shift();
-                    if (charCode !== undefined) this.startTransmission(charCode);
-                }
+                // We've satisfied idle time, send immediately?
+                // The original logic had a fixed delay. We replace it with configurable one.
+                const charCode = txQueue.shift();
+                if (charCode !== undefined) this.startTransmission(charCode);
                 return 1;
             }
 
             // Auto mode fallback
-            if (isAutoMode && this.timeInState > this.bitDuration * 4) {
+            // Remove hardcoded delay. 'minIdleTime' check above already enforces the user setting.
+            // If user sets 0 idle bits, we send back-to-back.
+            if (isAutoMode) {
                 const charCode = Math.floor(Math.random() * (126 - 33) + 33);
                 this.startTransmission(charCode);
             }
@@ -90,11 +101,15 @@ class UartTransmitter {
         return this.getOutputLevel();
     }
 
+    stopBitCounter = 0;
+
     startTransmission(byte: number) {
         this.currentByte = byte;
         this.state = 'START';
         this.timeInState = 0;
         this.bitIndex = 0;
+        this.stopBitCounter = 0;
+        this.txCompleteSent = false;
     }
 
     advanceState() {
@@ -110,14 +125,23 @@ class UartTransmitter {
                         this.state = 'PARITY';
                     } else {
                         this.state = 'STOP';
+                        this.stopBitCounter = 0;
                     }
                 }
                 break;
             case 'PARITY':
                 this.state = 'STOP';
+                this.stopBitCounter = 0;
                 break;
             case 'STOP':
-                this.state = 'IDLE';
+                this.stopBitCounter++;
+                if (this.stopBitCounter >= txConfig.stopBits) {
+                    this.state = 'IDLE';
+                    this.timeInState = 0; // Reset for IDLE
+                } else {
+                    // Stay in STOP for another bit duration
+                    this.timeInState = 0; // Reset for next STOP bit
+                }
                 break;
         }
     }
@@ -137,14 +161,25 @@ class UartTransmitter {
 
     calculateParity(byte: number): number {
         let ones = 0;
+        // Count set bits up to dataBits
         for (let i = 0; i < txConfig.dataBits; i++) {
             if ((byte >> i) & 1) ones++;
         }
+
         if (txConfig.parity === 'even') {
             return (ones % 2 === 0) ? 0 : 1;
-        } else {
+        }
+        else {
             return (ones % 2 !== 0) ? 0 : 1;
         }
+    }
+
+    shouldSignalComplete(): boolean {
+        return !isAutoMode &&
+            this.state === 'IDLE' &&
+            txQueue.length === 0 &&
+            this.timeInState > this.bitDuration * 5 &&
+            !this.txCompleteSent;
     }
 }
 
@@ -157,84 +192,146 @@ class UartReceiver {
 
     rxEventQueue: { type: 'RX_DATA' | 'RX_ERROR', payload: any }[] = [];
     private rxBuffer: number = 0;
-    private parityCalculated: number = 0;
+    private dataEmitted = false; // Flag to prevent double emission
 
-    // Returns dot type: 0=None, 1=Red(Start/Error), 2=Yellow(Data), 3=Green(Valid), 4=Purple(Stop), 5=Blue(Parity)
+    // Oversampling state
+    private signalAccumulator = 0;
+    private sampleCount = 0;
+
+    // Returns dot type: 0=None, 1=Green(Start), 2=Red(Error), 3=Yellow(Data), 4=Purple(Stop), 5=Blue(Parity)
     tick(deltaTime: number, currentRxLevel: number): number {
-        this.bitDuration = 1 / rxBaud;
+        // REMOVED: this.bitDuration = 1 / rxBaud; 
+        // We lock it when we detect the start bit!
 
         if (this.state === 'HUNTING') {
             // Detect falling edge (Start Bit)
             if (this.lastRxLevel === 1 && currentRxLevel === 0) {
                 this.state = 'SAMPLING';
-                this.timeSinceStart = 0;
+                this.bitDuration = 1 / rxBaud; // Lock baud rate HERE for the frame
+                this.timeSinceStart = 0.0; // Align exactly with edge
                 this.rxBuffer = 0;
-                this.parityCalculated = 0; // Reset parity
+                this.dataEmitted = false; // Reset emission flag
+
+                // Reset sampling
+                this.signalAccumulator = 0;
+                this.sampleCount = 0;
             }
             this.lastRxLevel = currentRxLevel;
             return 0;
         }
 
         if (this.state === 'SAMPLING') {
-            const prevTime = this.timeSinceStart;
+            const prevTime = Math.max(0, this.timeSinceStart);
             this.timeSinceStart += deltaTime;
             this.lastRxLevel = currentRxLevel;
+
+            // Standardize phase calculation using modulo
+            const currentPhase = (this.timeSinceStart % this.bitDuration) / this.bitDuration;
+            const prevPhase = (prevTime % this.bitDuration) / this.bitDuration;
+
+            // Reset accumulator when crossing into the sampling window (phase 0.2)
+            if (prevPhase < 0.2 && currentPhase >= 0.2) {
+                this.signalAccumulator = 0;
+                this.sampleCount = 0;
+            }
+
+            // Accumulate signal for majority vote / integration
+            // We ignore the first 20% and last 20% of the bit time to avoid edge jitter
+            if (currentPhase > 0.2 && currentPhase < 0.8) {
+                this.signalAccumulator += currentRxLevel;
+                this.sampleCount++;
+            }
 
             // Check for timeout / reset
             const totalBits = 1 + rxConfig.dataBits + (rxConfig.parity !== 'none' ? 1 : 0) + rxConfig.stopBits;
             if (this.timeSinceStart > (totalBits + 0.5) * this.bitDuration) {
+                // If line is still low after a full frame duration, it's a BREAK condition
+                if (currentRxLevel === 0) {
+                    this.rxEventQueue.push({ type: 'RX_ERROR', payload: 'BREAK' });
+                }
                 this.state = 'HUNTING';
                 return 0;
             }
 
-            // Boundary Crossing Detection
-            // Sample points are at X.5 bit durations (0.5, 1.5, 2.5...)
+            // Boundary Crossing Detection for Decision (Center Sampling at 0.5)
             const prevBitPos = prevTime / this.bitDuration;
             const currBitPos = this.timeSinceStart / this.bitDuration;
 
-            // Check if we crossed integer boundary in "shifted" space (bitPos - 0.5)
-            // e.g. 0.4 -> 0.6 crosses 0.5. (0.4-0.5=-0.1, 0.6-0.5=0.1. Floor changes from -1 to 0)
             const prevSampleIndex = Math.floor(prevBitPos - 0.5);
             const currSampleIndex = Math.floor(currBitPos - 0.5);
 
             if (currSampleIndex > prevSampleIndex) {
-                // We crossed a sampling point!
+                // We just crossed the center point (X.5)
                 const bitIndex = currSampleIndex; // 0=Start, 1=Data0...
 
+                // Determine bit value using majority vote of accumulated samples
+                // Fallback to current level if no samples (shouldn't happen with high sample rate)
+                let sampledBit = currentRxLevel;
+                if (this.sampleCount > 0) {
+                    sampledBit = (this.signalAccumulator / this.sampleCount) >= 0.5 ? 1 : 0;
+                }
+
+                // Don't reset accumulator here, we do it at window start now.
+
                 // Determine what kind of bit this is
-                if (bitIndex === 0) return 1; // Start Bit (Red)
+                if (bitIndex === 0) return 1; // Start Bit (Green)
 
                 if (bitIndex <= rxConfig.dataBits) {
                     const dataBitIndex = bitIndex - 1;
                     // LSB First
-                    if (currentRxLevel === 1) {
+                    if (sampledBit === 1) {
                         this.rxBuffer |= (1 << dataBitIndex);
-                        this.parityCalculated ^= 1; // Update calculated parity
                     }
-                    return 3; // Green (Was 2/Yellow)
+                    return 3; // Yellow (Data)
                 }
 
                 // Parity or Stop
                 if (rxConfig.parity !== 'none') {
                     if (bitIndex === rxConfig.dataBits + 1) {
-                        const expectedParity = rxConfig.parity === 'even' ? this.parityCalculated : (this.parityCalculated ^ 1);
-                        const receivedParity = currentRxLevel;
+                        // Calculate expected parity from the buffer we just built
+                        let ones = 0;
+                        for (let i = 0; i < rxConfig.dataBits; i++) {
+                            if ((this.rxBuffer >> i) & 1) ones++;
+                        }
+
+                        const expectedParity = rxConfig.parity === 'even' ? (ones % 2 === 0 ? 0 : 1) : (ones % 2 !== 0 ? 0 : 1);
+                        const receivedParity = sampledBit;
 
                         if (receivedParity !== expectedParity) {
+                            // Emit corrupted data anyway
+                            if (!this.dataEmitted) {
+                                this.rxEventQueue.push({ type: 'RX_DATA', payload: { char: String.fromCharCode(this.rxBuffer), error: true } });
+                                this.dataEmitted = true;
+                            }
                             this.rxEventQueue.push({ type: 'RX_ERROR', payload: 'PARITY_ERROR' });
-                            return 2; // Orange for Error
+                            return 2; // Red (Error)
                         }
-                        return 5; // Blue for Parity
+                        return 5; // Blue (Parity)
                     }
                     if (bitIndex > rxConfig.dataBits + 1) {
                         // Stop Bit Logic
-                        if (currentRxLevel !== 1) {
+                        if (sampledBit !== 1) {
+                            // Emit corrupted data anyway
+                            if (!this.dataEmitted) {
+                                this.rxEventQueue.push({ type: 'RX_DATA', payload: { char: String.fromCharCode(this.rxBuffer), error: true } });
+                                this.dataEmitted = true;
+                            }
                             this.rxEventQueue.push({ type: 'RX_ERROR', payload: 'FRAMING_ERROR' });
-                            return 2; // Orange for Error
+                            // Should we go to HUNTING immediately on error?
+                            // Yes, to try to resync.
+                            this.state = 'HUNTING';
+                            return 2; // Red (Error)
                         }
-                        // Emit Data ONCE
-                        if (bitIndex === rxConfig.dataBits + 2) {
-                            this.rxEventQueue.push({ type: 'RX_DATA', payload: String.fromCharCode(this.rxBuffer) });
+                        // Emit Data ONCE at the last stop bit
+                        const lastBitIndex = rxConfig.dataBits + 1 + rxConfig.stopBits;
+                        if (bitIndex === lastBitIndex) {
+                            if (!this.dataEmitted) {
+                                this.rxEventQueue.push({ type: 'RX_DATA', payload: { char: String.fromCharCode(this.rxBuffer), error: false } });
+                                this.dataEmitted = true;
+                            }
+
+                            // CRITICAL FIX: Return to HUNTING immediately to catch the next Start Bit
+                            this.state = 'HUNTING';
                             return 4;
                         }
                         return 4;
@@ -242,13 +339,26 @@ class UartReceiver {
                 } else {
                     if (bitIndex > rxConfig.dataBits) {
                         // Stop Bit Logic (No Parity)
-                        if (currentRxLevel !== 1) {
+                        if (sampledBit !== 1) {
+                            // Emit corrupted data anyway
+                            if (!this.dataEmitted) {
+                                this.rxEventQueue.push({ type: 'RX_DATA', payload: { char: String.fromCharCode(this.rxBuffer), error: true } });
+                                this.dataEmitted = true;
+                            }
                             this.rxEventQueue.push({ type: 'RX_ERROR', payload: 'FRAMING_ERROR' });
-                            return 2; // Orange for Error
+                            this.state = 'HUNTING';
+                            return 2; // Red (Error)
                         }
-                        // Emit Data ONCE
-                        if (bitIndex === rxConfig.dataBits + 1) {
-                            this.rxEventQueue.push({ type: 'RX_DATA', payload: String.fromCharCode(this.rxBuffer) });
+                        // Emit Data ONCE at the last stop bit
+                        const lastBitIndex = rxConfig.dataBits + rxConfig.stopBits;
+                        if (bitIndex === lastBitIndex) {
+                            if (!this.dataEmitted) {
+                                this.rxEventQueue.push({ type: 'RX_DATA', payload: { char: String.fromCharCode(this.rxBuffer), error: false } });
+                                this.dataEmitted = true;
+                            }
+
+                            // CRITICAL FIX: Back-to-back support
+                            this.state = 'HUNTING';
                             return 4;
                         }
                         return 4; // Purple
@@ -293,8 +403,6 @@ ctx.onmessage = (event) => {
             // Support updating separate TX/RX configs
             if (payload.txConfig) txConfig = { ...txConfig, ...payload.txConfig };
             if (payload.rxConfig) rxConfig = { ...rxConfig, ...payload.rxConfig };
-            // Legacy support if needed, or remove? Keeping for now but unused by new code logic
-            // if (payload.config) uartConfig = { ...uartConfig, ...payload.config }; 
             break;
         case 'TRANSMIT':
             if (payload.char) {
@@ -316,11 +424,22 @@ function startSimulation() {
     intervalId = self.setInterval(() => {
         if (!isRunning) return;
 
+        // Dynamic Sample Rate
+        // Ensure we sample at least 10x the fastest baud rate to catch edges and bits accurately
+        const maxBaud = Math.max(txBaud, rxBaud);
+        const targetSampleRate = Math.max(60, maxBaud * 10);
+        sampleRate = targetSampleRate;
+
         const dt = 1 / sampleRate;
 
         const chunk: (number | null)[][] = [[], [], [], [], [], [], []]; // [Time, TX, Start, Data, Valid, Stop, Parity]
 
-        for (let i = 0; i < 4; i++) {
+        // Number of steps to simulate per frame to keep up with real-time
+        // We want to simulate 'tickRate' ms worth of time.
+        // steps = (tickRate_sec) / dt = (1/60) / (1/sampleRate) = sampleRate / 60
+        const stepsPerFrame = Math.ceil(sampleRate / 60);
+
+        for (let i = 0; i < stepsPerFrame; i++) {
             axisTime += dt;
 
             const txLevel = transmitter.tick(dt);
@@ -332,9 +451,9 @@ function startSimulation() {
             // Distribute dots to correct series
             const dotY = -0.2;
 
-            chunk[2].push(dotType === 1 ? dotY : null); // Red (Start/Error)
-            chunk[3].push(dotType === 2 ? dotY : null); // Yellow (Data)
-            chunk[4].push(dotType === 3 ? dotY : null); // Green (Valid)
+            chunk[2].push(dotType === 1 ? dotY : null); // Green (Start)
+            chunk[3].push(dotType === 2 ? dotY : null); // Red (Error)
+            chunk[4].push(dotType === 3 ? dotY : null); // Yellow (Data)
             chunk[5].push(dotType === 4 ? dotY : null); // Purple (Stop)
             chunk[6].push(dotType === 5 ? dotY : null); // Blue (Parity)
         }
@@ -349,9 +468,10 @@ function startSimulation() {
             }
         }
 
-        // Check for Burst Completion
-        if (!isAutoMode && txQueue.length === 0 && transmitter.state === 'IDLE' && transmitter.timeInState > transmitter.bitDuration * 5) {
+        // Check for Burst Completion - Fix Race Condition
+        if (transmitter.shouldSignalComplete()) {
             ctx.postMessage({ type: 'TX_COMPLETE' });
+            transmitter.txCompleteSent = true;
         }
 
     }, tickRate);

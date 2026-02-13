@@ -95,11 +95,11 @@ function App() {
                 <div className="w-2.5 h-2.5 rounded-full bg-[#FF003C] shadow-[0_0_5px_#FF003C]"></div>
                 <span className="text-[#FF003C]">ERROR</span>
 
-                <div className="w-2.5 h-2.5 rounded-full bg-[#BD00FF] shadow-[0_0_5px_#BD00FF]"></div>
-                <span className="text-cyber-neon-cyan" style={{ color: '#BD00FF' }}>STOP BIT</span>
-
                 <div className="w-2.5 h-2.5 rounded-full bg-[#2E59FF] shadow-[0_0_5px_#2E59FF]"></div>
                 <span className="text-cyber-neon-cyan" style={{ color: '#2E59FF' }}>PARITY BIT</span>
+
+                <div className="w-2.5 h-2.5 rounded-full bg-[#BD00FF] shadow-[0_0_5px_#BD00FF]"></div>
+                <span className="text-cyber-neon-cyan" style={{ color: '#BD00FF' }}>STOP BIT</span>
 
                 <div className="w-full h-[2px] bg-cyber-neon-cyan shadow-[0_0_5px_#00F0FF] mt-1"></div>
                 <span className="text-cyber-neon-cyan mt-1">SIGNAL LINE</span>
@@ -108,7 +108,7 @@ function App() {
           </section>
 
           {/* Device Control Panel (New) */}
-          <section className="h-64 shrink-0">
+          <section className="h-75 shrink-0">
             <DevicePanel
               onTransmit={handleTransmit}
               onConfigure={configure}

@@ -9,7 +9,7 @@ export function useSimulation() {
     // Initialize with 7 arrays: [Time, TX, Start, Data, Valid, Stop, Parity]
     const [data, setData] = useState<uPlot.AlignedData>([[], [], [], [], [], [], []]);
     const [isRunning, setIsRunning] = useState(false);
-    const [rxLog, setRxLog] = useState<string[]>([]);
+    const [rxLog, setRxLog] = useState<{ char: string; error: boolean }[]>([]);
     const [rxError, setRxError] = useState<string | null>(null);
 
     // Buffer to hold data before flushing to state (optional optimization)
@@ -62,7 +62,8 @@ export function useSimulation() {
                 workerRef.current?.postMessage({ type: 'STOP' });
                 setIsRunning(false);
             } else if (type === 'RX_DATA') {
-                setRxLog(prev => [...prev.slice(-29), payload]); // Keep last 30 chars
+                const entry = typeof payload === 'string' ? { char: payload, error: false } : payload;
+                setRxLog(prev => [...prev.slice(-29), entry]); // Keep last 30 chars
             } else if (type === 'RX_ERROR') {
                 setRxError(payload);
                 // Clear error after 1s
