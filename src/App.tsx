@@ -36,8 +36,9 @@ function App() {
           <ScopeDisplay
             data={data}
             isRunning={isRunning}
-            scopeRef={scopeRef}
-          />
+            scopeRef={scopeRef} onSpeedChange={function (speed: number): void {
+              throw new Error('Function not implemented.');
+            }} currentSpeed={0} />
 
           {/* Device Control Panel */}
           <section className="h-75 shrink-0">

@@ -63,7 +63,12 @@ export function useSimulation() {
                 setIsRunning(false);
             } else if (type === 'RX_DATA') {
                 const entry = typeof payload === 'string' ? { char: payload, error: false } : payload;
-                setRxLog(prev => [...prev.slice(-29), entry]); // Keep last 30 chars
+                setRxLog(prev => {
+                    // Keep a larger history (e.g. 2000 chars) instead of just 30
+                    const newLog = [...prev, entry];
+                    if (newLog.length > 2000) return newLog.slice(newLog.length - 2000);
+                    return newLog;
+                });
             } else if (type === 'RX_ERROR') {
                 setRxError(payload);
                 // Clear error after 1s
@@ -103,5 +108,9 @@ export function useSimulation() {
         workerRef.current?.postMessage({ type: 'SET_AUTO', payload: { enabled } });
     }, []);
 
-    return { data, start, stop, reset, transmit, configure, setAutoMode, isRunning, rxLog, rxError };
+    const setSpeed = useCallback((speed: number) => {
+        workerRef.current?.postMessage({ type: 'SET_SPEED', payload: { speed } });
+    }, []);
+
+    return { data, start, stop, reset, transmit, configure, setAutoMode, setSpeed, isRunning, rxLog, rxError };
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getDisplayBaud } from '../../utils/serialUtils';
 
 interface ReceiverPanelProps {
     onConfigure: (config: { rxBaud?: number; rxConfig?: any }) => void;
@@ -11,7 +12,7 @@ export const ReceiverPanel: React.FC<ReceiverPanelProps> = ({
     rxLog,
     rxError
 }) => {
-    const [rxBaud, setRxBaud] = useState(2);
+    const [rxBaud, setRxBaud] = useState(6); // Default to 9600 (Index 6)
     const [rxParity, setRxParity] = useState<'none' | 'even' | 'odd'>('none');
     const [rxStopBits, setRxStopBits] = useState<number>(1);
     const logRef = useRef<HTMLDivElement>(null);
@@ -23,17 +24,18 @@ export const ReceiverPanel: React.FC<ReceiverPanelProps> = ({
         }
     }, [rxLog]);
 
-    // Map internal speed (1-10) to "Standard" Baud Rates for display
-    const getDisplayBaud = (val: number) => {
-        const rates = [300, 600, 1200, 2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200];
-        const index = Math.min(Math.floor(val) - 1, rates.length - 1);
-        return rates[index] || 9600;
-    };
+    // Sync initial configuration on mount
+    useEffect(() => {
+        onConfigure({
+            rxBaud: getDisplayBaud(6),
+            rxConfig: { parity: 'none', stopBits: 1 }
+        });
+    }, []); // Run once on mount
 
     const handleRxBaudChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = Number(e.target.value);
         setRxBaud(val);
-        onConfigure({ rxBaud: val });
+        onConfigure({ rxBaud: getDisplayBaud(val) });
     };
 
     const handleRxParityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {

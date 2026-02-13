@@ -5,13 +5,17 @@ interface ScopeControlsProps {
     onZoomOut: () => void;
     onReset: () => void;
     onPan: (direction: 'left' | 'right') => void;
+    onSpeedChange?: (speed: number) => void;
+    currentSpeed?: number;
 }
 
 export const ScopeControls: React.FC<ScopeControlsProps> = ({
     onZoomIn,
     onZoomOut,
     onReset,
-    onPan
+    onPan,
+    onSpeedChange,
+    currentSpeed = 1
 }) => {
     return (
         <div className="absolute top-4 right-4 z-20 flex gap-2">
@@ -26,6 +30,14 @@ export const ScopeControls: React.FC<ScopeControlsProps> = ({
                     RESET
                 </button>
             </div>
+
+            {/* Speed Controls */}
+            <div className="flex bg-black/80 border border-cyber-dark-gray rounded overflow-hidden backdrop-blur-sm">
+                <button onClick={() => onSpeedChange?.(1)} className={`px-2 py-1 text-xs hover:bg-cyber-neon-cyan/20 transition-colors ${currentSpeed === 1 ? 'text-cyber-neon-cyan font-bold bg-cyber-neon-cyan/10' : 'text-gray-400'}`} title="Real-time">1x</button>
+                <button onClick={() => onSpeedChange?.(0.5)} className={`px-2 py-1 text-xs border-l border-cyber-dark-gray hover:bg-cyber-neon-cyan/20 transition-colors ${currentSpeed === 0.5 ? 'text-cyber-neon-cyan font-bold bg-cyber-neon-cyan/10' : 'text-gray-400'}`} title="Half Speed">0.5x</button>
+                <button onClick={() => onSpeedChange?.(0.1)} className={`px-2 py-1 text-xs border-l border-cyber-dark-gray hover:bg-cyber-neon-cyan/20 transition-colors ${currentSpeed === 0.1 ? 'text-cyber-neon-cyan font-bold bg-cyber-neon-cyan/10' : 'text-gray-400'}`} title="Slow Motion">0.1x</button>
+            </div>
+
             <div className="flex bg-black/80 border border-cyber-dark-gray rounded overflow-hidden backdrop-blur-sm">
                 <button onClick={() => onPan('left')} className="p-2 hover:bg-cyber-neon-cyan/20 text-cyber-neon-cyan transition-colors" title="Pan Left">←</button>
                 <button onClick={() => onPan('right')} className="p-2 hover:bg-cyber-neon-cyan/20 text-cyber-neon-cyan transition-colors border-l border-cyber-dark-gray" title="Pan Right">→</button>

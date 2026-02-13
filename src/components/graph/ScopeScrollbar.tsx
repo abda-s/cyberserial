@@ -1,4 +1,5 @@
 import { useRef, useImperativeHandle, forwardRef, useEffect } from 'react';
+import { clampViewRange } from '../../utils/graphUtils';
 
 export interface ScopeScrollbarHandle {
     update: (viewMin: number, viewMax: number, dataMin: number, dataMax: number) => void;
@@ -89,26 +90,13 @@ export const ScopeScrollbar = forwardRef<ScopeScrollbarHandle, ScopeScrollbarPro
             let newMin = startViewMin + timeShift;
             let newMax = startViewMax + timeShift;
 
-            // Clamp Logic
-            // 1. Min cannot be less than dataMin
-            if (newMin < startDataMin) {
-                const diff = startDataMin - newMin;
-                newMin += diff;
-                newMax += diff;
-            }
-
-            // 2. Max: Strict clamp to dataMax, UNLESS data is smaller than window
-            const currentWindow = newMax - newMin;
-            const limit = Math.max(startDataMax, currentWindow);
-
-            if (newMax > limit) {
-                const diff = newMax - limit;
-                newMax -= diff;
-                newMin -= diff;
-            }
+            const clamped = clampViewRange(newMin, newMax, startDataMin, startDataMax);
+            newMin = clamped.min;
+            newMax = clamped.max;
 
             onUserScroll(newMin, newMax);
         };
+
 
         const handleMouseUp = () => {
             if (isDragging) {

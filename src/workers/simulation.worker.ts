@@ -10,9 +10,10 @@ let intervalId: number | null = null;
 let axisTime = 0; // Continuous time for x-axis
 
 // Configurable parameters
-let txBaud = 2; // Transmitter Baud Rate
-let rxBaud = 2; // Receiver Baud Rate
+let txBaud = 9600; // Transmitter Baud Rate
+let rxBaud = 9600; // Receiver Baud Rate
 let sampleRate = 60;
+let speedFactor = 1; // 1 = Real-time, 0.5 = Half speed, etc.
 
 // UART Configuration
 interface UartConfig {
@@ -37,6 +38,7 @@ let rxConfig: UartConfig = {
 
 // Transmission Queue
 const txQueue: number[] = [];
+const expectedRxQueue: number[] = []; // Queue to track what was sent for verification
 let isAutoMode = false; // If true, generates random data. If false, waits for queue.
 
 // --- UART Transmitter Logic ---
@@ -110,6 +112,7 @@ class UartTransmitter {
         this.bitIndex = 0;
         this.stopBitCounter = 0;
         this.txCompleteSent = false;
+        expectedRxQueue.push(byte); // Track expected character
     }
 
     advanceState() {
@@ -178,7 +181,7 @@ class UartTransmitter {
         return !isAutoMode &&
             this.state === 'IDLE' &&
             txQueue.length === 0 &&
-            this.timeInState > this.bitDuration * 5 &&
+            this.timeInState > this.bitDuration * 3 &&
             !this.txCompleteSent;
     }
 }
@@ -197,6 +200,59 @@ class UartReceiver {
     // Oversampling state
     private signalAccumulator = 0;
     private sampleCount = 0;
+
+    private emitData(rxByte: number, knownError: boolean) {
+        if (this.dataEmitted) return;
+
+        let isMismatch = false;
+        let matchFound = false;
+
+        // Lookahead Search to Re-sync
+        // If the first item doesn't match, check the next few items.
+        // This handles cases where packets were dropped/garbled due to baud mismatch,
+        // allowing us to latch onto the new "correct" stream.
+        const LOOKAHEAD_DEPTH = 50;
+        const searchLimit = Math.min(expectedRxQueue.length, LOOKAHEAD_DEPTH);
+
+        for (let i = 0; i < searchLimit; i++) {
+            if (expectedRxQueue[i] === rxByte) {
+                // Found a match!
+                // Drop everything before this index (assumed lost/garbage)
+                // And remove the matched item itself.
+                expectedRxQueue.splice(0, i + 1);
+                matchFound = true;
+                break;
+            }
+        }
+
+        if (matchFound) {
+            isMismatch = false;
+        } else {
+            // No match found in lookahead.
+            // This is likely random noise or a completely corrupted character.
+            // We do NOT remove anything from the queue, hoping the "real" character appears next.
+            // Exception: If the queue is HUGE, we might want to drop old stuff, but splice above handles sync.
+            // If the queue is empty, it's definitely a mismatch (phantom data).
+            isMismatch = true;
+        }
+
+        const isError = knownError || isMismatch;
+
+        // If mismatch, specifically signal it
+        if (isMismatch && !knownError) {
+            this.rxEventQueue.push({ type: 'RX_ERROR', payload: 'DATA_MISMATCH' });
+        }
+
+        this.rxEventQueue.push({
+            type: 'RX_DATA',
+            payload: {
+                char: String.fromCharCode(rxByte),
+                error: isError
+            }
+        });
+
+        this.dataEmitted = true;
+    }
 
     // Returns dot type: 0=None, 1=Green(Start), 2=Red(Error), 3=Yellow(Data), 4=Purple(Stop), 5=Blue(Parity)
     tick(deltaTime: number, currentRxLevel: number): number {
@@ -299,10 +355,8 @@ class UartReceiver {
 
                         if (receivedParity !== expectedParity) {
                             // Emit corrupted data anyway
-                            if (!this.dataEmitted) {
-                                this.rxEventQueue.push({ type: 'RX_DATA', payload: { char: String.fromCharCode(this.rxBuffer), error: true } });
-                                this.dataEmitted = true;
-                            }
+                            this.emitData(this.rxBuffer, true);
+
                             this.rxEventQueue.push({ type: 'RX_ERROR', payload: 'PARITY_ERROR' });
                             return 2; // Red (Error)
                         }
@@ -312,10 +366,8 @@ class UartReceiver {
                         // Stop Bit Logic
                         if (sampledBit !== 1) {
                             // Emit corrupted data anyway
-                            if (!this.dataEmitted) {
-                                this.rxEventQueue.push({ type: 'RX_DATA', payload: { char: String.fromCharCode(this.rxBuffer), error: true } });
-                                this.dataEmitted = true;
-                            }
+                            this.emitData(this.rxBuffer, true);
+
                             this.rxEventQueue.push({ type: 'RX_ERROR', payload: 'FRAMING_ERROR' });
                             // Should we go to HUNTING immediately on error?
                             // Yes, to try to resync.
@@ -325,10 +377,7 @@ class UartReceiver {
                         // Emit Data ONCE at the last stop bit
                         const lastBitIndex = rxConfig.dataBits + 1 + rxConfig.stopBits;
                         if (bitIndex === lastBitIndex) {
-                            if (!this.dataEmitted) {
-                                this.rxEventQueue.push({ type: 'RX_DATA', payload: { char: String.fromCharCode(this.rxBuffer), error: false } });
-                                this.dataEmitted = true;
-                            }
+                            this.emitData(this.rxBuffer, false);
 
                             // CRITICAL FIX: Return to HUNTING immediately to catch the next Start Bit
                             this.state = 'HUNTING';
@@ -341,10 +390,8 @@ class UartReceiver {
                         // Stop Bit Logic (No Parity)
                         if (sampledBit !== 1) {
                             // Emit corrupted data anyway
-                            if (!this.dataEmitted) {
-                                this.rxEventQueue.push({ type: 'RX_DATA', payload: { char: String.fromCharCode(this.rxBuffer), error: true } });
-                                this.dataEmitted = true;
-                            }
+                            this.emitData(this.rxBuffer, true);
+
                             this.rxEventQueue.push({ type: 'RX_ERROR', payload: 'FRAMING_ERROR' });
                             this.state = 'HUNTING';
                             return 2; // Red (Error)
@@ -352,10 +399,7 @@ class UartReceiver {
                         // Emit Data ONCE at the last stop bit
                         const lastBitIndex = rxConfig.dataBits + rxConfig.stopBits;
                         if (bitIndex === lastBitIndex) {
-                            if (!this.dataEmitted) {
-                                this.rxEventQueue.push({ type: 'RX_DATA', payload: { char: String.fromCharCode(this.rxBuffer), error: false } });
-                                this.dataEmitted = true;
-                            }
+                            this.emitData(this.rxBuffer, false);
 
                             // CRITICAL FIX: Back-to-back support
                             this.state = 'HUNTING';
@@ -413,6 +457,9 @@ ctx.onmessage = (event) => {
         case 'SET_AUTO':
             if (payload.enabled !== undefined) isAutoMode = payload.enabled;
             break;
+        case 'SET_SPEED':
+            if (payload.speed !== undefined) speedFactor = payload.speed;
+            break;
         default:
             break;
     }
@@ -437,7 +484,8 @@ function startSimulation() {
         // Number of steps to simulate per frame to keep up with real-time
         // We want to simulate 'tickRate' ms worth of time.
         // steps = (tickRate_sec) / dt = (1/60) / (1/sampleRate) = sampleRate / 60
-        const stepsPerFrame = Math.ceil(sampleRate / 60);
+        // Apply Time Dilation (Speed Factor) here:
+        const stepsPerFrame = Math.ceil((sampleRate / 60) * speedFactor);
 
         for (let i = 0; i < stepsPerFrame; i++) {
             axisTime += dt;
@@ -456,6 +504,20 @@ function startSimulation() {
             chunk[4].push(dotType === 3 ? dotY : null); // Yellow (Data)
             chunk[5].push(dotType === 4 ? dotY : null); // Purple (Stop)
             chunk[6].push(dotType === 5 ? dotY : null); // Blue (Parity)
+
+            // Check for Burst Completion Inside Loop for Bit-Perfect Precision
+            if (transmitter.shouldSignalComplete()) {
+                ctx.postMessage({ type: 'TX_COMPLETE' });
+                transmitter.txCompleteSent = true;
+
+                // Stop generating idle signal immediately
+                isRunning = false;
+                if (intervalId) {
+                    clearInterval(intervalId);
+                    intervalId = null;
+                }
+                break; // Exit the loop
+            }
         }
 
         ctx.postMessage({ type: 'DATA', payload: chunk });
@@ -466,12 +528,6 @@ function startSimulation() {
             if (event) {
                 ctx.postMessage(event);
             }
-        }
-
-        // Check for Burst Completion - Fix Race Condition
-        if (transmitter.shouldSignalComplete()) {
-            ctx.postMessage({ type: 'TX_COMPLETE' });
-            transmitter.txCompleteSent = true;
         }
 
     }, tickRate);

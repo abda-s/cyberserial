@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GlitchButton } from '../GlitchButton';
+import { getDisplayBaud } from '../../utils/serialUtils';
 
 interface TransmitterPanelProps {
     onTransmit: (char: string) => void;
@@ -18,23 +19,24 @@ export const TransmitterPanel: React.FC<TransmitterPanelProps> = ({
     txStatus,
     setTxStatus
 }) => {
-    const [txBaud, setTxBaud] = useState(2);
+    const [txBaud, setTxBaud] = useState(6); // Default to 9600 (Index 6)
     const [txParity, setTxParity] = useState<'none' | 'even' | 'odd'>('none');
     const [txStopBits, setTxStopBits] = useState<number>(1);
     const [txIdleBits, setTxIdleBits] = useState<number>(0);
     const [inputData, setInputData] = useState('');
 
-    // Map internal speed (1-10) to "Standard" Baud Rates for display
-    const getDisplayBaud = (val: number) => {
-        const rates = [300, 600, 1200, 2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200];
-        const index = Math.min(Math.floor(val) - 1, rates.length - 1);
-        return rates[index] || 9600;
-    };
+    // Sync initial configuration on mount
+    useEffect(() => {
+        onConfigure({
+            txBaud: getDisplayBaud(6),
+            txConfig: { parity: 'none', stopBits: 1, idleBits: 0 }
+        });
+    }, []); // Run once on mount
 
     const handleTxBaudChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = Number(e.target.value);
         setTxBaud(val);
-        onConfigure({ txBaud: val });
+        onConfigure({ txBaud: getDisplayBaud(val) });
     };
 
     const handleTxParityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -80,13 +82,17 @@ export const TransmitterPanel: React.FC<TransmitterPanelProps> = ({
     // Effect 2: Handle success message duration (sent -> idle)
     useEffect(() => {
         if (txStatus === 'sent') {
+            const baudRate = getDisplayBaud(txBaud);
+            const bitTimeMs = (1 / baudRate) * 1000;
+            const delay = bitTimeMs * 3;
+
             const timer = setTimeout(() => {
                 setTxStatus('idle');
                 setInputData('');
-            }, 1500);
+            }, delay);
             return () => clearTimeout(timer);
         }
-    }, [txStatus, setTxStatus]);
+    }, [txStatus, setTxStatus, txBaud]);
 
     return (
         <div className="bg-black/40 border border-cyber-dark-gray p-4 relative overflow-y-auto group h-full">

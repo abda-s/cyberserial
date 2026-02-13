@@ -9,12 +9,16 @@ interface ScopeDisplayProps {
     data: uPlot.AlignedData;
     isRunning: boolean;
     scopeRef: React.RefObject<ScopeGraphHandle | null>;
+    onSpeedChange: (speed: number) => void;
+    currentSpeed: number;
 }
 
 export const ScopeDisplay: React.FC<ScopeDisplayProps> = ({
     data,
     isRunning,
-    scopeRef
+    scopeRef,
+    onSpeedChange,
+    currentSpeed
 }) => {
     return (
         <section className="flex-1 relative bg-cyber-dark-gray/30 border border-cyber-dark-gray overflow-hidden shadow-inner flex flex-col min-h-0">
@@ -34,6 +38,8 @@ export const ScopeDisplay: React.FC<ScopeDisplayProps> = ({
                 onZoomOut={() => scopeRef.current?.zoomOut()}
                 onReset={() => scopeRef.current?.reset()}
                 onPan={(dir) => scopeRef.current?.pan(dir)}
+                onSpeedChange={onSpeedChange}
+                currentSpeed={currentSpeed}
             />
 
             <SignalLegend />
