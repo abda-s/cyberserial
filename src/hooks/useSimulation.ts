@@ -3,6 +3,7 @@ import uPlot from 'uplot';
 
 // Import worker using Vite's syntax
 import SimulationWorker from '../workers/simulation.worker?worker';
+import { DEFAULT_SPEED, DEFAULT_BAUD_RATE } from '../utils/serialUtils';
 
 export function useSimulation() {
     const workerRef = useRef<Worker | null>(null);
@@ -11,6 +12,7 @@ export function useSimulation() {
     const [isRunning, setIsRunning] = useState(false);
     const [rxLog, setRxLog] = useState<{ char: string; error: boolean }[]>([]);
     const [rxError, setRxError] = useState<string | null>(null);
+    const [txBaud, setTxBaudState] = useState(DEFAULT_BAUD_RATE);
 
     // Buffer to hold data before flushing to state (optional optimization)
     // For now we just append to state for simplicity in Phase 1
@@ -19,6 +21,8 @@ export function useSimulation() {
 
     useEffect(() => {
         workerRef.current = new SimulationWorker();
+
+        workerRef.current.postMessage({ type: 'SET_SPEED', payload: { speed: DEFAULT_SPEED } });
 
         workerRef.current.onmessage = (e) => {
             const { type, payload } = e.data;
@@ -102,6 +106,9 @@ export function useSimulation() {
 
     const configure = useCallback((config: { txBaud?: number; rxBaud?: number; config?: any; txConfig?: any; rxConfig?: any }) => {
         workerRef.current?.postMessage({ type: 'CONFIGURE', payload: config });
+        if (config.txBaud) {
+            setTxBaudState(config.txBaud);
+        }
     }, []);
 
     const setAutoMode = useCallback((enabled: boolean) => {
@@ -112,5 +119,5 @@ export function useSimulation() {
         workerRef.current?.postMessage({ type: 'SET_SPEED', payload: { speed } });
     }, []);
 
-    return { data, start, stop, reset, transmit, configure, setAutoMode, setSpeed, isRunning, rxLog, rxError };
+    return { data, start, stop, reset, transmit, configure, setAutoMode, setSpeed, isRunning, rxLog, rxError, txBaud };
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useImperativeHandle, useState, useCallback } from 'r
 import uPlot from 'uplot';
 import type { ScopeScrollbarHandle } from '../components/graph/ScopeScrollbar';
 import { clampViewRange } from '../utils/graphUtils';
+import { DEFAULT_WINDOW_SIZE, calculateWindowSize } from '../utils/serialUtils';
 
 export interface ScopeGraphHandle {
     zoomIn: () => void;
@@ -14,14 +15,22 @@ export interface ScopeGraphHandle {
 export const useScopeGraph = (
     data: uPlot.AlignedData,
     ref: React.Ref<ScopeGraphHandle>,
-    options?: Partial<uPlot.Options>
+    options?: Partial<uPlot.Options>,
+    txBaud?: number
 ) => {
     const plotRef = useRef<HTMLDivElement>(null);
     const uPlotInstance = useRef<uPlot | null>(null);
     const isAutoScroll = useRef(true);
-    const currentWindowSize = useRef(0.005); // Default to 5ms (reasonable for 9600 baud)
+    const currentWindowSize = useRef(DEFAULT_WINDOW_SIZE);
     const manualRange = useRef<{ min: number, max: number } | null>(null);
     const scrollbarHandleRef = useRef<ScopeScrollbarHandle>(null);
+
+    // Update window size based on baud rate (only when no data)
+    useEffect(() => {
+        if (txBaud && data[0].length === 0) {
+            currentWindowSize.current = calculateWindowSize(txBaud);
+        }
+    }, [txBaud, data]);
 
     // State for cursor values
     const [cursorValues, setCursorValues] = useState<{
@@ -152,12 +161,13 @@ export const useScopeGraph = (
             if (!uPlotInstance.current) return;
             isAutoScroll.current = true;
             manualRange.current = null;
-            currentWindowSize.current = 13;
+            const newWindowSize = txBaud ? calculateWindowSize(txBaud) : DEFAULT_WINDOW_SIZE;
+            currentWindowSize.current = newWindowSize;
 
             const xData = uPlotInstance.current.data[0];
             if (xData && xData.length > 0) {
                 const max = xData[xData.length - 1];
-                const min = Math.max(xData[0], max - 13);
+                const min = Math.max(xData[0], max - newWindowSize);
                 uPlotInstance.current.setScale('x', { min, max });
                 forceUpdateScrollbar(min, max);
             } else {

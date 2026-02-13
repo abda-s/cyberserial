@@ -13,7 +13,7 @@ let axisTime = 0; // Continuous time for x-axis
 let txBaud = 9600; // Transmitter Baud Rate
 let rxBaud = 9600; // Receiver Baud Rate
 let sampleRate = 60;
-let speedFactor = 1; // 1 = Real-time, 0.5 = Half speed, etc.
+let speedFactor = 0.001; // 1 = Real-time, 0.5 = Half speed, etc. (fallback - overridden by main thread)
 
 // UART Configuration
 interface UartConfig {

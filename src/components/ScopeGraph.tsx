@@ -11,12 +11,13 @@ export type { ScopeGraphHandle };
 interface ScopeGraphProps {
     data: uPlot.AlignedData;
     options?: Partial<uPlot.Options>;
+    txBaud?: number;
 }
 
-export const ScopeGraph = forwardRef<ScopeGraphHandle, ScopeGraphProps>(({ data, options }, ref) => {
+export const ScopeGraph = forwardRef<ScopeGraphHandle, ScopeGraphProps>(({ data, options, txBaud }, ref) => {
 
     // Use the custom hook for all logic
-    const { plotRef, scrollbarHandleRef, cursorValues, handleUserScroll } = useScopeGraph(data, ref, options);
+    const { plotRef, scrollbarHandleRef, cursorValues, handleUserScroll } = useScopeGraph(data, ref, options, txBaud);
 
     return (
         <div className="w-full h-full flex flex-col">

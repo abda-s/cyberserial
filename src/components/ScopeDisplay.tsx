@@ -11,6 +11,7 @@ interface ScopeDisplayProps {
     scopeRef: React.RefObject<ScopeGraphHandle | null>;
     onSpeedChange: (speed: number) => void;
     currentSpeed: number;
+    txBaud?: number;
 }
 
 export const ScopeDisplay: React.FC<ScopeDisplayProps> = ({
@@ -18,12 +19,13 @@ export const ScopeDisplay: React.FC<ScopeDisplayProps> = ({
     isRunning,
     scopeRef,
     onSpeedChange,
-    currentSpeed
+    currentSpeed,
+    txBaud
 }) => {
     return (
         <section className="flex-1 relative bg-cyber-dark-gray/30 border border-cyber-dark-gray overflow-hidden shadow-inner flex flex-col min-h-0">
             <div className="flex-1 relative w-full h-full">
-                <ScopeGraph ref={scopeRef} data={data} />
+                <ScopeGraph ref={scopeRef} data={data} txBaud={txBaud} />
             </div>
 
             {/* Integrated Message Overlay if stopped */}
@@ -37,7 +39,6 @@ export const ScopeDisplay: React.FC<ScopeDisplayProps> = ({
                 onZoomIn={() => scopeRef.current?.zoomIn()}
                 onZoomOut={() => scopeRef.current?.zoomOut()}
                 onReset={() => scopeRef.current?.reset()}
-                onPan={(dir) => scopeRef.current?.pan(dir)}
                 onSpeedChange={onSpeedChange}
                 currentSpeed={currentSpeed}
             />

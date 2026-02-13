@@ -1,13 +1,15 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useSimulation } from './hooks/useSimulation';
 import type { ScopeGraphHandle } from './components/ScopeGraph';
 import { DevicePanel } from './components/DevicePanel';
 import { AppHeader } from './components/layout/AppHeader';
 import { ScopeDisplay } from './components/ScopeDisplay';
 import { ControlPanel } from './components/layout/ControlPanel';
+import { DEFAULT_SPEED } from './utils/serialUtils';
 
 function App() {
-  const { data, start, isRunning, transmit, configure, setAutoMode, rxLog, rxError } = useSimulation();
+  const { data, start, isRunning, transmit, configure, setAutoMode, setSpeed, rxLog, rxError, txBaud } = useSimulation();
+  const [currentSpeed, setCurrentSpeed] = useState(DEFAULT_SPEED);
   const scopeRef = useRef<ScopeGraphHandle>(null);
 
   const handleTransmit = (char: string | number) => {
@@ -18,6 +20,11 @@ function App() {
   const handleAutoMode = (enabled: boolean) => {
     if (enabled) scopeRef.current?.scrollToEnd();
     setAutoMode(enabled);
+  };
+
+  const handleSpeedChange = (speed: number) => {
+    setSpeed(speed);
+    setCurrentSpeed(speed);
   };
 
   return (
@@ -36,9 +43,10 @@ function App() {
           <ScopeDisplay
             data={data}
             isRunning={isRunning}
-            scopeRef={scopeRef} onSpeedChange={function (speed: number): void {
-              throw new Error('Function not implemented.');
-            }} currentSpeed={0} />
+            scopeRef={scopeRef}
+            onSpeedChange={handleSpeedChange}
+            currentSpeed={currentSpeed}
+            txBaud={txBaud} />
 
           {/* Device Control Panel */}
           <section className="h-75 shrink-0">
